@@ -11,6 +11,7 @@ from authentication.serializers import UserSerializer
 from authentication.core.jwt_utils import TokenManager
 from authentication.models import CustomUser
 from rest_framework_simplejwt.tokens import RefreshToken
+from authentication.verification.tasks import send_verification_email_task
 
 logger = logging.getLogger(__name__)
 
@@ -52,4 +53,42 @@ class AuthenticationService:
             if phone_number : 
                 user.phone_number = phone_number
                 user.save(update_fields = ['phone_number'])
+                
+            # Queue verification email for new user asynchronusly
+            if user.email and settings.REQUIRE_EMAIL_VERIFICATION:
+                try:
+                    send_verification_email_task.delay(user.id)
+                    logger.info(f"Queued verification email for new user : {user.email}")
+                except Exception as e:
+                    logger.error(f"Failed to queue verification email task for user {user.id}:{str(e)}")
+                    
+            # serialize user data with request context
+            context = {}
+            if request:
+                context['request'] = request
+            serializer = UserSerializer(user, context=context)
+            
+            #Generate tokens
+            tokens = TokenManager.generate_tokens(user)
+            
+            logger.info(f"Registration successful for user: {user.email}")
+            
+            #return successfull response data
+            return True,{
+                "success":True,
+                "data":{
+                    "user":serializer.data,
+                    'tokens': tokens,
+                    'is_new_user': True,
+                    "email_verified":user.is_verified
+                    }
+                }, 201
+            
+        except Exception as e:
+            logger.error (f"Registration error: {str(e)}")
+            return False, {
+                "success": False,
+                "error":"Registration Failed. Please try again"
+            }, 400
+                
         

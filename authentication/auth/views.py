@@ -29,6 +29,29 @@ class UserRegistrationView(BaseAPIView):
             first_name = request.data.get('first_name')
             last_name = request.data.get('last_name')
             
+            success, response_data, status_code = AuthenticationService.register(
+                email = email, 
+                password=password,
+                phone_number= phone_number,
+                first_name= first_name,
+                last_name= last_name,
+                request = request.META,
+                request=request
+                
+            )
+            
+            # create response obj
+            response = Response(
+                standarized_response(**response_data), status=status_code
+            )
+            
+            if success and status_code in (200,201) and settings.JWT_COOKIE_SECURE:
+                tokens = response_data.get('data',{}).get('tokens',{}) #data from services.py
+                
+            
+            
+            
+            
             
 
                     
